@@ -121,6 +121,27 @@ select.inp option{background:#10151f}
 </style>
 </head>
 <body>
+<script>
+(function(){
+  const PASSWORD = "skjsinarkreasijaya1976";
+  if (sessionStorage.getItem('skj_unlocked') === 'yes') return;
+  document.documentElement.style.visibility = 'hidden';
+  window.addEventListener('DOMContentLoaded', function(){
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
+    overlay.innerHTML = '<div style="background:#fff;padding:32px;border-radius:12px;width:340px;max-width:90vw;box-shadow:0 20px 50px rgba(0,0,0,0.3);"><h2 style="margin:0 0 8px;font-size:18px;color:#0f172a;">🔒 Dashboard Terkunci</h2><p style="margin:0 0 16px;color:#64748b;font-size:13px;">Masukkan password untuk akses dashboard pembelian SKJ</p><input id="skj-pwd" type="password" placeholder="Password" autofocus style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;margin-bottom:8px;box-sizing:border-box;" /><div id="skj-err" style="color:#dc2626;font-size:12px;min-height:18px;margin-bottom:8px;"></div><button id="skj-btn" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:14px;">Buka Dashboard</button></div>';
+    document.body.appendChild(overlay);
+    document.documentElement.style.visibility = 'visible';
+    function check(){
+      const v = document.getElementById('skj-pwd').value;
+      if (v === PASSWORD){ sessionStorage.setItem('skj_unlocked','yes'); overlay.remove(); }
+      else { document.getElementById('skj-err').textContent = 'Password salah!'; document.getElementById('skj-pwd').value=''; }
+    }
+    document.getElementById('skj-btn').onclick = check;
+    document.getElementById('skj-pwd').addEventListener('keydown', function(e){ if(e.key==='Enter') check(); });
+  });
+})();
+</script>
 
 <div class="topbar">
   <div class="logo-wrap">
