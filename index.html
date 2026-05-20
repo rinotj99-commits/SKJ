@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Pembelian - SKJ</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">SKJ</div>
+      <div>
+        <h1>Dashboard Pembelian</h1>
+        <p class="subtitle">Purchasing Analytics &middot; Multi Badan Usaha</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-add" class="btn btn-primary">+ Input Pembelian</button>
+      <button id="btn-import" class="btn btn-secondary">Import CSV</button>
+      <button id="btn-export" class="btn btn-secondary">Export CSV</button>
+      <button id="btn-sample" class="btn btn-ghost" title="Load contoh data">Load Sample</button>
+      <button id="btn-clear" class="btn btn-danger" title="Hapus semua data">Reset</button>
+      <input type="file" id="file-input" accept=".csv" hidden />
+    </div>
+  </header>
+
+  <!-- FILTER BAR -->
+  <section class="filterbar">
+    <div class="filter-group">
+      <label>Tahun</label>
+      <select id="f-year"></select>
+    </div>
+    <div class="filter-group">
+      <label>Bulan</label>
+      <select id="f-month">
+        <option value="all">Semua Bulan</option>
+        <option value="0">Januari</option>
+        <option value="1">Februari</option>
+        <option value="2">Maret</option>
+        <option value="3">April</option>
+        <option value="4">Mei</option>
+        <option value="5">Juni</option>
+        <option value="6">Juli</option>
+        <option value="7">Agustus</option>
+        <option value="8">September</option>
+        <option value="9">Oktober</option>
+        <option value="10">November</option>
+        <option value="11">Desember</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Badan Usaha</label>
+      <select id="f-bu"><option value="all">Semua BU</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Outlet</label>
+      <select id="f-outlet"><option value="all">Semua Outlet</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Vendor</label>
+      <select id="f-vendor"><option value="all">Semua Vendor</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Divisi</label>
+      <select id="f-divisi"><option value="all">Semua Divisi</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Mode Compare</label>
+      <select id="f-compare">
+        <option value="mom">Month-to-Month (MoM)</option>
+        <option value="yoy">Year-on-Year (YoY)</option>
+        <option value="ytd">Year-to-Date (YTD)</option>
+      </select>
+    </div>
+    <button id="btn-reset-filter" class="btn btn-ghost">Reset Filter</button>
+  </section>
+
+  <!-- KPI CARDS -->
+  <section class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Pembelian</div>
+      <div class="kpi-value" id="kpi-total">Rp 0</div>
+      <div class="kpi-sub" id="kpi-total-sub">0 transaksi</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Periode Berjalan</div>
+      <div class="kpi-value" id="kpi-current">Rp 0</div>
+      <div class="kpi-sub" id="kpi-current-sub">-</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" id="kpi-compare-label">vs Periode Lalu</div>
+      <div class="kpi-value" id="kpi-compare">Rp 0</div>
+      <div class="kpi-sub"><span id="kpi-delta" class="delta">-</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg per Transaksi</div>
+      <div class="kpi-value" id="kpi-avg">Rp 0</div>
+      <div class="kpi-sub" id="kpi-avg-sub">-</div>
+    </div>
+  </section>
+
+  <!-- CHARTS -->
+  <section class="chart-grid">
+    <div class="chart-card chart-wide">
+      <div class="chart-header">
+        <h3>Tren Pembelian per Bulan</h3>
+        <span class="chart-hint" id="trend-hint">Tahun terpilih vs tahun lalu</span>
+      </div>
+      <div class="chart-body"><canvas id="chart-trend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><h3>Per Badan Usaha</h3></div>
+      <div class="chart-body"><canvas id="chart-bu"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><h3>Per Divisi</h3></div>
+      <div class="chart-body"><canvas id="chart-divisi"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><h3>Top 10 Vendor</h3></div>
+      <div class="chart-body"><canvas id="chart-vendor"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><h3>Per Outlet</h3></div>
+      <div class="chart-body"><canvas id="chart-outlet"></canvas></div>
+    </div>
+  </section>
+
+  <!-- RANKINGS -->
+  <section class="rank-grid">
+    <div class="rank-card">
+      <h3>🏆 Ranking Badan Usaha</h3>
+      <table class="rank-table"><thead><tr><th>#</th><th>Badan Usaha</th><th class="num">Total</th><th class="num">Trx</th></tr></thead><tbody id="rank-bu"></tbody></table>
+    </div>
+    <div class="rank-card">
+      <h3>🏪 Ranking Outlet</h3>
+      <table class="rank-table"><thead><tr><th>#</th><th>Outlet</th><th class="num">Total</th><th class="num">Trx</th></tr></thead><tbody id="rank-outlet"></tbody></table>
+    </div>
+    <div class="rank-card">
+      <h3>📦 Ranking Vendor</h3>
+      <table class="rank-table"><thead><tr><th>#</th><th>Vendor</th><th class="num">Total</th><th class="num">Trx</th></tr></thead><tbody id="rank-vendor"></tbody></table>
+    </div>
+    <div class="rank-card">
+      <h3>🗂️ Ranking Divisi</h3>
+      <table class="rank-table"><thead><tr><th>#</th><th>Divisi</th><th class="num">Total</th><th class="num">Trx</th></tr></thead><tbody id="rank-divisi"></tbody></table>
+    </div>
+  </section>
+
+  <!-- TRANSACTIONS TABLE -->
+  <section class="trx-section">
+    <div class="trx-header">
+      <h3>Daftar Transaksi <span class="muted" id="trx-count">(0)</span></h3>
+      <input type="text" id="trx-search" placeholder="Cari deskripsi / vendor / outlet..." />
+    </div>
+    <div class="table-wrap">
+      <table class="trx-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Badan Usaha</th>
+            <th>Outlet</th>
+            <th>Vendor</th>
+            <th>Divisi</th>
+            <th>Deskripsi</th>
+            <th class="num">Qty</th>
+            <th class="num">Harga Satuan</th>
+            <th class="num">Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="trx-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- MODAL: ADD/EDIT -->
+  <div id="modal" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Input Pembelian</h3>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <form id="form-trx" class="modal-body">
+        <input type="hidden" id="form-id" />
+        <div class="form-row">
+          <label>Tanggal *</label>
+          <input type="date" id="form-tanggal" required />
+        </div>
+        <div class="form-row">
+          <label>Badan Usaha *</label>
+          <input list="dl-bu" id="form-bu" required placeholder="Pilih / ketik nama BU" />
+          <datalist id="dl-bu"></datalist>
+        </div>
+        <div class="form-row">
+          <label>Outlet *</label>
+          <input list="dl-outlet" id="form-outlet" required placeholder="Pilih / ketik outlet" />
+          <datalist id="dl-outlet"></datalist>
+        </div>
+        <div class="form-row">
+          <label>Vendor *</label>
+          <input list="dl-vendor" id="form-vendor" required placeholder="Pilih / ketik vendor" />
+          <datalist id="dl-vendor"></datalist>
+        </div>
+        <div class="form-row">
+          <label>Divisi *</label>
+          <input list="dl-divisi" id="form-divisi" required placeholder="Pilih / ketik divisi" />
+          <datalist id="dl-divisi"></datalist>
+        </div>
+        <div class="form-row">
+          <label>Deskripsi Barang/Jasa</label>
+          <input type="text" id="form-deskripsi" placeholder="Nama barang / keterangan" />
+        </div>
+        <div class="form-row form-row-3">
+          <div>
+            <label>Qty *</label>
+            <input type="number" id="form-qty" required min="0" step="any" value="1" />
+          </div>
+          <div>
+            <label>Satuan</label>
+            <input type="text" id="form-satuan" placeholder="pcs / kg / box" />
+          </div>
+          <div>
+            <label>Harga Satuan *</label>
+            <input type="number" id="form-harga" required min="0" step="any" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Total Harga</label>
+          <input type="text" id="form-total" readonly class="readonly" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="form-cancel">Batal</button>
+          <button type="submit" class="btn btn-primary" id="form-submit">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
