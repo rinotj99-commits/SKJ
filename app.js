@@ -1,28 +1,60 @@
 /* === SKJ Purchasing Dashboard - Logic === */
 
-const STORAGE_KEY = 'skj_purchasing_data_v1';
+const STORAGE_KEY = 'skj_purchasing_data_v2';
+const BUDGET_KEY = 'skj_purchasing_budget_v1';
 const FMT_RP = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 const FMT_NUM = new Intl.NumberFormat('id-ID');
 const MONTHS = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const MONTHS_FULL = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DEFAULT_BU = ['PT', 'CV', 'PW', 'SW'];
+const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected'];
+const PAYMENT_STATUSES = ['Unpaid', 'Partial', 'Paid'];
 
 // Color palette for charts
 const COLORS = ['#2563eb','#0ea5e9','#16a34a','#d97706','#dc2626','#7c3aed','#db2777','#0891b2','#65a30d','#ea580c'];
 
 // === STATE ===
 let data = loadData();
+let budget = loadBudget();
 let charts = {};
 let editingId = null;
 
 // === DATA PERSISTENCE ===
 function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    // Try v2 first, fall back to v1 (auto-migrate)
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const v1 = localStorage.getItem('skj_purchasing_data_v1');
+      if (v1) {
+        const oldData = JSON.parse(v1);
+        // Migrate: add default approvalStatus, paymentStatus
+        const migrated = oldData.map(r => ({
+          ...r,
+          prNumber: r.prNumber || '',
+          poNumber: r.poNumber || '',
+          approvalStatus: r.approvalStatus || 'Approved',
+          paymentStatus: r.paymentStatus || 'Paid',
+        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+      return [];
+    }
+    return JSON.parse(raw);
   } catch (e) { return []; }
 }
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+function loadBudget() {
+  try {
+    const raw = localStorage.getItem(BUDGET_KEY);
+    return raw ? JSON.parse(raw) : { byYear: {} }; // { byYear: { "2026": { bu: {PT: 100000000}, divisi: {Food: 50000000} } } }
+  } catch (e) { return { byYear: {} }; }
+}
+function saveBudget() {
+  localStorage.setItem(BUDGET_KEY, JSON.stringify(budget));
 }
 
 // === UTILS ===
@@ -33,7 +65,7 @@ function pctDelta(curr, prev) {
   if (!prev) return curr > 0 ? 100 : 0;
   return ((curr - prev) / prev) * 100;
 }
-function uniqSorted(arr) { return [...new Set(arr)].sort((a,b) => a.localeCompare(b)); }
+function uniqSorted(arr) { return [...new Set(arr.filter(v => v))].sort((a,b) => a.localeCompare(b)); }
 
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -51,6 +83,8 @@ function getFilters() {
     outlet: document.getElementById('f-outlet').value,
     vendor: document.getElementById('f-vendor').value,
     divisi: document.getElementById('f-divisi').value,
+    approval: document.getElementById('f-approval').value,
+    payment: document.getElementById('f-payment').value,
     compare: document.getElementById('f-compare').value,
   };
 }
@@ -63,30 +97,32 @@ function applyFilters(rows, f, ignore = []) {
     if (f.outlet !== 'all' && r.outlet !== f.outlet) return false;
     if (f.vendor !== 'all' && r.vendor !== f.vendor) return false;
     if (f.divisi !== 'all' && r.divisi !== f.divisi) return false;
+    if (f.approval !== 'all' && r.approvalStatus !== f.approval) return false;
+    if (f.payment !== 'all' && r.paymentStatus !== f.payment) return false;
     return true;
   });
 }
 
 // === POPULATE FILTER OPTIONS ===
 function populateFilterOptions() {
-  const years = uniqSorted([...new Set(data.map(r => new Date(r.tanggal).getFullYear()))].map(String));
+  const years = [...new Set(data.map(r => new Date(r.tanggal).getFullYear()))].sort((a,b) => b - a);
   const yearSel = document.getElementById('f-year');
   const currentY = yearSel.value;
   yearSel.innerHTML = '<option value="all">Semua Tahun</option>';
-  years.reverse().forEach(y => {
-    yearSel.innerHTML += `<option value="${y}">${y}</option>`;
-  });
-  // default to current year if exists
+  years.forEach(y => { yearSel.innerHTML += `<option value="${y}">${y}</option>`; });
   const thisYear = String(new Date().getFullYear());
-  if (years.includes(thisYear)) yearSel.value = currentY || thisYear;
-  else yearSel.value = currentY || (years[0] || 'all');
+  if (currentY && [...yearSel.options].some(o => o.value === currentY)) yearSel.value = currentY;
+  else if (years.includes(+thisYear)) yearSel.value = thisYear;
+  else if (years.length) yearSel.value = String(years[0]);
 
-  populateSelect('f-bu', uniqSorted(data.map(r => r.badanUsaha)), 'Semua BU');
+  // Combine default BU + data BUs
+  const buFromData = uniqSorted(data.map(r => r.badanUsaha));
+  const allBU = [...new Set([...DEFAULT_BU, ...buFromData])].sort((a,b) => a.localeCompare(b));
+  populateSelect('f-bu', allBU, 'Semua BU');
   populateSelect('f-outlet', uniqSorted(data.map(r => r.outlet)), 'Semua Outlet');
   populateSelect('f-vendor', uniqSorted(data.map(r => r.vendor)), 'Semua Vendor');
   populateSelect('f-divisi', uniqSorted(data.map(r => r.divisi)), 'Semua Divisi');
 
-  populateDatalist('dl-bu', uniqSorted(data.map(r => r.badanUsaha)));
   populateDatalist('dl-outlet', uniqSorted(data.map(r => r.outlet)));
   populateDatalist('dl-vendor', uniqSorted(data.map(r => r.vendor)));
   populateDatalist('dl-divisi', uniqSorted(data.map(r => r.divisi)));
@@ -118,7 +154,6 @@ function renderKPI() {
   let currLabel = 'Periode Berjalan', curr = 0, prev = 0, prevLabel = 'Periode Lalu';
 
   if (cmp === 'mom') {
-    // Pakai bulan yg dipilih (atau bulan saat ini kalo "all")
     const now = new Date();
     const targetYear = f.year === 'all' ? now.getFullYear() : +f.year;
     const targetMonth = f.month === 'all' ? now.getMonth() : +f.month;
@@ -155,6 +190,18 @@ function renderKPI() {
   deltaEl.className = 'delta ' + cls;
   deltaEl.textContent = `${arrow} ${delta.toFixed(1)}%`;
 
+  // Pending Approval (from filtered)
+  const pendingRows = filtered.filter(r => r.approvalStatus === 'Pending');
+  const pendingTotal = pendingRows.reduce((s, r) => s + r.total, 0);
+  document.getElementById('kpi-pending').textContent = rp(pendingTotal);
+  document.getElementById('kpi-pending-sub').textContent = `${num(pendingRows.length)} transaksi menunggu`;
+
+  // Outstanding Payment (Unpaid + Partial, only from approved)
+  const outstandingRows = filtered.filter(r => r.approvalStatus !== 'Rejected' && (r.paymentStatus === 'Unpaid' || r.paymentStatus === 'Partial'));
+  const outstandingTotal = outstandingRows.reduce((s, r) => s + r.total, 0);
+  document.getElementById('kpi-outstanding').textContent = rp(outstandingTotal);
+  document.getElementById('kpi-outstanding-sub').textContent = `${num(outstandingRows.length)} belum/parsial`;
+
   const avg = filtered.length ? total / filtered.length : 0;
   document.getElementById('kpi-avg').textContent = rp(avg);
   document.getElementById('kpi-avg-sub').textContent = `dari ${num(filtered.length)} trx`;
@@ -189,7 +236,6 @@ function renderCharts() {
 }
 
 function renderTrendChart(f) {
-  // Show 12 months for selected year + previous year as comparison
   const now = new Date();
   const targetYear = f.year === 'all' ? now.getFullYear() : +f.year;
   const baseRows = applyFilters(data, f, ['year','month']);
@@ -240,7 +286,7 @@ function renderTrendChart(f) {
 
 function renderGroupChart(canvasId, rows, key, type, limit = null) {
   const map = {};
-  rows.forEach(r => { map[r[key]] = (map[r[key]] || 0) + r.total; });
+  rows.forEach(r => { if (r[key]) map[r[key]] = (map[r[key]] || 0) + r.total; });
   let entries = Object.entries(map).sort((a,b) => b[1] - a[1]);
   if (limit) entries = entries.slice(0, limit);
 
@@ -327,6 +373,64 @@ function destroyChart(id) {
   if (charts[id]) { charts[id].destroy(); delete charts[id]; }
 }
 
+// === BUDGET ===
+function renderBudget() {
+  const f = getFilters();
+  const now = new Date();
+  const targetYear = f.year === 'all' ? now.getFullYear() : +f.year;
+  document.getElementById('budget-period').textContent = `Tahun ${targetYear}`;
+
+  const yearBudget = budget.byYear[targetYear] || { bu: {}, divisi: {} };
+
+  // Actual: filter by year only (ignore other filters? or respect?)
+  // We respect month filter too if set — actual = sum of filtered data for that year
+  const actualByBU = {};
+  const actualByDivisi = {};
+  data.forEach(r => {
+    const d = new Date(r.tanggal);
+    if (d.getFullYear() !== targetYear) return;
+    if (f.month !== 'all' && d.getMonth() !== +f.month) return;
+    if (r.approvalStatus === 'Rejected') return; // exclude rejected
+    actualByBU[r.badanUsaha] = (actualByBU[r.badanUsaha] || 0) + r.total;
+    actualByDivisi[r.divisi] = (actualByDivisi[r.divisi] || 0) + r.total;
+  });
+
+  renderBudgetList('budget-bu-list', yearBudget.bu, actualByBU);
+  renderBudgetList('budget-divisi-list', yearBudget.divisi, actualByDivisi);
+}
+
+function renderBudgetList(elId, budgetMap, actualMap) {
+  const el = document.getElementById(elId);
+  // Combine keys from budget and actual
+  const keys = [...new Set([...Object.keys(budgetMap), ...Object.keys(actualMap)])].sort();
+  if (!keys.length) {
+    el.innerHTML = '<div class="budget-empty">Belum ada budget. Klik "Atur Budget" untuk set target tahunan.</div>';
+    return;
+  }
+  el.innerHTML = keys.map(k => {
+    const bud = budgetMap[k] || 0;
+    const act = actualMap[k] || 0;
+    const pct = bud ? (act / bud) * 100 : 0;
+    let cls = 'safe';
+    if (pct >= 100) cls = 'danger';
+    else if (pct >= 80) cls = 'warning';
+    else cls = 'safe';
+    const remaining = bud - act;
+    return `
+      <div class="budget-item">
+        <div class="budget-item-head">
+          <span class="budget-item-name">${escapeHtml(k)}</span>
+          <span class="budget-item-stats">${rp(act)} / ${bud ? rp(bud) : '<i>belum diset</i>'}</span>
+        </div>
+        <div class="budget-bar"><div class="budget-bar-fill ${cls}" style="width: ${Math.min(pct, 100).toFixed(1)}%"></div></div>
+        <div class="budget-item-stats" style="margin-top: 4px;">
+          ${bud ? `${pct.toFixed(1)}% terpakai · ${remaining >= 0 ? 'Sisa ' + rp(remaining) : '<span style="color:#dc2626">Over ' + rp(-remaining) + '</span>'}` : 'Set budget untuk tracking'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 // === RANKINGS ===
 function renderRankings() {
   const f = getFilters();
@@ -339,6 +443,7 @@ function renderRankings() {
 function renderRankTable(tbodyId, rows, key) {
   const map = {};
   rows.forEach(r => {
+    if (!r[key]) return;
     if (!map[r[key]]) map[r[key]] = { total: 0, count: 0 };
     map[r[key]].total += r.total;
     map[r[key]].count += 1;
@@ -370,7 +475,9 @@ function renderTrxTable() {
       r.vendor.toLowerCase().includes(search) ||
       r.outlet.toLowerCase().includes(search) ||
       r.badanUsaha.toLowerCase().includes(search) ||
-      r.divisi.toLowerCase().includes(search)
+      r.divisi.toLowerCase().includes(search) ||
+      (r.prNumber || '').toLowerCase().includes(search) ||
+      (r.poNumber || '').toLowerCase().includes(search)
     );
   }
   rows.sort((a,b) => new Date(b.tanggal) - new Date(a.tanggal));
@@ -379,28 +486,31 @@ function renderTrxTable() {
 
   const tbody = document.getElementById('trx-body');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty">Belum ada transaksi. Klik "Input Pembelian" atau "Load Sample" untuk mulai.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="empty">Belum ada transaksi. Klik "Input Pembelian" atau "Load Sample" untuk mulai.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.slice(0, 200).map(r => `
     <tr>
       <td>${formatDate(r.tanggal)}</td>
-      <td>${escapeHtml(r.badanUsaha)}</td>
+      <td><strong>${escapeHtml(r.badanUsaha)}</strong></td>
       <td>${escapeHtml(r.outlet)}</td>
       <td>${escapeHtml(r.vendor)}</td>
       <td>${escapeHtml(r.divisi)}</td>
+      <td>${escapeHtml(r.prNumber || '-')}</td>
+      <td>${escapeHtml(r.poNumber || '-')}</td>
       <td>${escapeHtml(r.deskripsi || '-')}</td>
       <td class="num">${num(r.qty)} ${escapeHtml(r.satuan || '')}</td>
-      <td class="num">${rp(r.hargaSatuan)}</td>
       <td class="num"><strong>${rp(r.total)}</strong></td>
-      <td class="trx-actions">
+      <td><span class="badge badge-${(r.approvalStatus||'pending').toLowerCase()}">${escapeHtml(r.approvalStatus || 'Pending')}</span></td>
+      <td><span class="badge badge-${(r.paymentStatus||'unpaid').toLowerCase()}">${escapeHtml(r.paymentStatus || 'Unpaid')}</span></td>
+      <td class="trx-actions no-print">
         <button onclick="editTrx('${r.id}')" title="Edit">✎</button>
         <button class="delete" onclick="deleteTrx('${r.id}')" title="Hapus">🗑</button>
       </td>
     </tr>
   `).join('');
   if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="10" class="empty">Menampilkan 200 dari ${num(rows.length)} transaksi. Gunakan filter untuk mempersempit.</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="13" class="empty">Menampilkan 200 dari ${num(rows.length)} transaksi. Gunakan filter untuk mempersempit.</td></tr>`;
   }
 }
 function formatDate(s) {
@@ -413,6 +523,7 @@ function renderAll() {
   populateFilterOptions();
   renderKPI();
   renderCharts();
+  renderBudget();
   renderRankings();
   renderTrxTable();
 }
@@ -427,10 +538,14 @@ function openModal(record = null) {
   document.getElementById('form-outlet').value = record?.outlet || '';
   document.getElementById('form-vendor').value = record?.vendor || '';
   document.getElementById('form-divisi').value = record?.divisi || '';
+  document.getElementById('form-pr').value = record?.prNumber || '';
+  document.getElementById('form-po').value = record?.poNumber || '';
   document.getElementById('form-deskripsi').value = record?.deskripsi || '';
   document.getElementById('form-qty').value = record?.qty ?? 1;
   document.getElementById('form-satuan').value = record?.satuan || '';
   document.getElementById('form-harga').value = record?.hargaSatuan ?? '';
+  document.getElementById('form-approval').value = record?.approvalStatus || 'Pending';
+  document.getElementById('form-payment').value = record?.paymentStatus || 'Unpaid';
   updateFormTotal();
   document.getElementById('modal').classList.remove('hidden');
 }
@@ -455,9 +570,74 @@ window.deleteTrx = function(id) {
   showToast('Transaksi dihapus', 'success');
 };
 
+// === BUDGET MODAL ===
+function openBudgetModal() {
+  // Populate year selector with current year + 2 surrounding years + any years that have data
+  const yearsFromData = [...new Set(data.map(r => new Date(r.tanggal).getFullYear()))];
+  const yearsFromBudget = Object.keys(budget.byYear).map(Number);
+  const now = new Date().getFullYear();
+  const allYears = [...new Set([now - 1, now, now + 1, ...yearsFromData, ...yearsFromBudget])].sort((a,b) => b - a);
+  const sel = document.getElementById('budget-year');
+  sel.innerHTML = allYears.map(y => `<option value="${y}">${y}</option>`).join('');
+
+  const f = getFilters();
+  const targetYear = f.year === 'all' ? now : +f.year;
+  if (allYears.includes(targetYear)) sel.value = targetYear;
+
+  renderBudgetInputs();
+  sel.onchange = renderBudgetInputs;
+
+  document.getElementById('modal-budget').classList.remove('hidden');
+}
+function closeBudgetModal() {
+  document.getElementById('modal-budget').classList.add('hidden');
+}
+function renderBudgetInputs() {
+  const year = document.getElementById('budget-year').value;
+  const yearBudget = budget.byYear[year] || { bu: {}, divisi: {} };
+
+  // BU inputs (start with default + saved)
+  const buFromData = uniqSorted(data.map(r => r.badanUsaha));
+  const buKeys = [...new Set([...DEFAULT_BU, ...buFromData, ...Object.keys(yearBudget.bu)])];
+  document.getElementById('budget-bu-inputs').innerHTML = buKeys.map(k => budgetInputRow(k, yearBudget.bu[k] || '', 'bu')).join('');
+
+  const divisiKeys = [...new Set([...uniqSorted(data.map(r => r.divisi)), ...Object.keys(yearBudget.divisi)])];
+  if (!divisiKeys.length) divisiKeys.push('');
+  document.getElementById('budget-divisi-inputs').innerHTML = divisiKeys.map(k => budgetInputRow(k, yearBudget.divisi[k] || '', 'divisi')).join('');
+}
+function budgetInputRow(name, value, kind) {
+  return `
+    <div class="budget-input-row" data-kind="${kind}">
+      <input type="text" placeholder="Nama (${kind === 'bu' ? 'PT/CV/PW/SW' : 'divisi'})" value="${escapeHtml(name)}" class="budget-name" />
+      <input type="number" placeholder="Budget Rp" value="${value}" min="0" class="budget-value" />
+      <button type="button" onclick="this.closest('.budget-input-row').remove()" title="Hapus">✕</button>
+    </div>
+  `;
+}
+function saveBudgetForm() {
+  const year = document.getElementById('budget-year').value;
+  const buMap = {};
+  const divisiMap = {};
+  document.querySelectorAll('#budget-bu-inputs .budget-input-row').forEach(row => {
+    const name = row.querySelector('.budget-name').value.trim();
+    const val = parseFloat(row.querySelector('.budget-value').value) || 0;
+    if (name && val > 0) buMap[name] = val;
+  });
+  document.querySelectorAll('#budget-divisi-inputs .budget-input-row').forEach(row => {
+    const name = row.querySelector('.budget-name').value.trim();
+    const val = parseFloat(row.querySelector('.budget-value').value) || 0;
+    if (name && val > 0) divisiMap[name] = val;
+  });
+  budget.byYear[year] = { bu: buMap, divisi: divisiMap };
+  saveBudget();
+  closeBudgetModal();
+  renderBudget();
+  showToast(`Budget tahun ${year} disimpan`, 'success');
+}
+
 // === CSV ===
 function toCSV(rows) {
-  const headers = ['tanggal','badanUsaha','outlet','vendor','divisi','deskripsi','qty','satuan','hargaSatuan','total'];
+  const headers = ['tanggal','badanUsaha','outlet','vendor','divisi','prNumber','poNumber','deskripsi','qty','satuan','hargaSatuan','total','approvalStatus','paymentStatus'];
   const escape = (v) => {
     const s = String(v ?? '');
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -529,9 +709,13 @@ function importCSV(file) {
           outlet: (r.outlet || '').trim(),
           vendor: (r.vendor || '').trim(),
           divisi: (r.divisi || '').trim(),
+          prNumber: (r.prNumber || '').trim(),
+          poNumber: (r.poNumber || '').trim(),
           deskripsi: (r.deskripsi || '').trim(),
           qty, satuan: (r.satuan || '').trim(),
-          hargaSatuan, total
+          hargaSatuan, total,
+          approvalStatus: APPROVAL_STATUSES.includes(r.approvalStatus) ? r.approvalStatus : 'Approved',
+          paymentStatus: PAYMENT_STATUSES.includes(r.paymentStatus) ? r.paymentStatus : 'Paid',
         });
         added++;
       });
@@ -545,8 +729,7 @@ function importCSV(file) {
   reader.readAsText(file);
 }
 function normalizeDate(s) {
-  // Accept YYYY-MM-DD or DD/MM/YYYY
-  s = s.trim();
+  s = (s || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
@@ -556,7 +739,7 @@ function normalizeDate(s) {
 // === SAMPLE DATA ===
 function loadSample() {
   if (data.length && !confirm('Data existing akan ditambahkan. Lanjutkan?')) return;
-  const buList = ['PT Sumber Karya Jaya', 'PT Bintang Niaga', 'PT Mitra Sejati', 'PT Andalan Prima'];
+  const buList = DEFAULT_BU; // PT, CV, PW, SW
   const outletList = ['Outlet Jakarta Pusat','Outlet Bandung','Outlet Surabaya','Outlet Medan','Outlet Bali','Outlet Makassar'];
   const vendorList = ['CV Sentosa','PT Aneka Pangan','UD Berkah Jaya','PT Distribusi Nasional','CV Maju Mundur','PT Logistik Cepat','UD Sumber Rejeki'];
   const divisiList = ['Food','Beverage','Non-Food','Packaging','Office Supplies','Maintenance'];
@@ -565,6 +748,9 @@ function loadSample() {
 
   const now = new Date();
   let added = 0;
+  let prCounter = 1;
+  let poCounter = 1;
+
   for (let yOffset = 1; yOffset >= 0; yOffset--) {
     const year = now.getFullYear() - yOffset;
     for (let m = 0; m < 12; m++) {
@@ -574,6 +760,13 @@ function loadSample() {
         const day = 1 + Math.floor(Math.random() * 28);
         const qty = Math.floor(1 + Math.random() * 100);
         const harga = [50000, 100000, 250000, 500000, 1000000, 2500000][Math.floor(Math.random()*6)];
+        // Random status weighted
+        const r1 = Math.random();
+        const approvalStatus = r1 < 0.7 ? 'Approved' : (r1 < 0.9 ? 'Pending' : 'Rejected');
+        const r2 = Math.random();
+        const paymentStatus = approvalStatus === 'Approved'
+          ? (r2 < 0.6 ? 'Paid' : (r2 < 0.85 ? 'Partial' : 'Unpaid'))
+          : 'Unpaid';
         data.push({
           id: uid(),
           tanggal: `${year}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
@@ -581,26 +774,55 @@ function loadSample() {
           outlet: outletList[Math.floor(Math.random()*outletList.length)],
           vendor: vendorList[Math.floor(Math.random()*vendorList.length)],
           divisi: divisiList[Math.floor(Math.random()*divisiList.length)],
+          prNumber: `PR-${year}-${String(prCounter++).padStart(4,'0')}`,
+          poNumber: approvalStatus === 'Approved' ? `PO-${year}-${String(poCounter++).padStart(4,'0')}` : '',
           deskripsi: items[Math.floor(Math.random()*items.length)],
           qty,
           satuan: satuans[Math.floor(Math.random()*satuans.length)],
           hargaSatuan: harga,
-          total: qty * harga
+          total: qty * harga,
+          approvalStatus,
+          paymentStatus,
         });
         added++;
       }
     }
   }
+
+  // Also seed sample budget for current year if empty
+  if (!budget.byYear[now.getFullYear()]) {
+    budget.byYear[now.getFullYear()] = {
+      bu: { PT: 500000000, CV: 300000000, PW: 250000000, SW: 200000000 },
+      divisi: { Food: 400000000, Beverage: 200000000, 'Non-Food': 150000000, Packaging: 100000000, 'Office Supplies': 80000000, Maintenance: 120000000 }
+    };
+    saveBudget();
+  }
+
   saveData(); renderAll();
-  showToast(`Sample data dimuat (${added} baris)`, 'success');
+  showToast(`Sample data dimuat (${added} baris) + budget`, 'success');
+}
+
+// === PRINT ===
+function printReport() {
+  const f = getFilters();
+  const yearLabel = f.year === 'all' ? 'Semua Tahun' : f.year;
+  const monthLabel = f.month === 'all' ? '' : ` - ${MONTHS_FULL[+f.month]}`;
+  const buLabel = f.bu === 'all' ? '' : ` · BU: ${f.bu}`;
+  document.getElementById('print-title').textContent = 'Laporan Pembelian SKJ';
+  document.getElementById('print-period').textContent = `Periode: ${yearLabel}${monthLabel}${buLabel}`;
+  document.getElementById('print-date').textContent = `Dicetak: ${new Date().toLocaleString('id-ID')}`;
+  setTimeout(() => window.print(), 100);
 }
 
 // === EVENT LISTENERS ===
 function init() {
   // Topbar
   document.getElementById('btn-add').onclick = () => openModal();
+  document.getElementById('btn-budget').onclick = openBudgetModal;
+  document.getElementById('btn-budget-2').onclick = openBudgetModal;
   document.getElementById('btn-import').onclick = () => document.getElementById('file-input').click();
   document.getElementById('btn-export').onclick = exportCSV;
+  document.getElementById('btn-print').onclick = printReport;
   document.getElementById('btn-sample').onclick = loadSample;
   document.getElementById('btn-clear').onclick = () => {
     if (!data.length) { showToast('Data sudah kosong'); return; }
@@ -614,9 +836,9 @@ function init() {
   };
 
   // Filters
-  ['f-year','f-month','f-bu','f-outlet','f-vendor','f-divisi','f-compare'].forEach(id => {
+  ['f-year','f-month','f-bu','f-outlet','f-vendor','f-divisi','f-approval','f-payment','f-compare'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
-      renderKPI(); renderCharts(); renderRankings(); renderTrxTable();
+      renderKPI(); renderCharts(); renderBudget(); renderRankings(); renderTrxTable();
     });
   });
   document.getElementById('btn-reset-filter').onclick = () => {
@@ -625,12 +847,14 @@ function init() {
     document.getElementById('f-outlet').value = 'all';
     document.getElementById('f-vendor').value = 'all';
     document.getElementById('f-divisi').value = 'all';
+    document.getElementById('f-approval').value = 'all';
+    document.getElementById('f-payment').value = 'all';
     document.getElementById('f-compare').value = 'mom';
-    renderKPI(); renderCharts(); renderRankings(); renderTrxTable();
+    renderKPI(); renderCharts(); renderBudget(); renderRankings(); renderTrxTable();
   };
   document.getElementById('trx-search').addEventListener('input', renderTrxTable);
 
-  // Modal
+  // Modal: Transaksi
   document.getElementById('modal-close').onclick = closeModal;
   document.getElementById('form-cancel').onclick = closeModal;
   document.getElementById('modal').addEventListener('click', (e) => {
@@ -650,11 +874,15 @@ function init() {
       outlet: document.getElementById('form-outlet').value.trim(),
       vendor: document.getElementById('form-vendor').value.trim(),
       divisi: document.getElementById('form-divisi').value.trim(),
+      prNumber: document.getElementById('form-pr').value.trim(),
+      poNumber: document.getElementById('form-po').value.trim(),
       deskripsi: document.getElementById('form-deskripsi').value.trim(),
       qty,
       satuan: document.getElementById('form-satuan').value.trim(),
       hargaSatuan,
       total: qty * hargaSatuan,
+      approvalStatus: document.getElementById('form-approval').value,
+      paymentStatus: document.getElementById('form-payment').value,
     };
     if (editingId) {
       const idx = data.findIndex(r => r.id === editingId);
@@ -665,6 +893,20 @@ function init() {
       showToast('Transaksi ditambahkan', 'success');
     }
     saveData(); closeModal(); renderAll();
+  });
+
+  // Modal: Budget
+  document.getElementById('modal-budget-close').onclick = closeBudgetModal;
+  document.getElementById('btn-budget-cancel').onclick = closeBudgetModal;
+  document.getElementById('btn-budget-save').onclick = saveBudgetForm;
+  document.getElementById('btn-add-bu-budget').onclick = () => {
+    document.getElementById('budget-bu-inputs').insertAdjacentHTML('beforeend', budgetInputRow('', '', 'bu'));
+  };
+  document.getElementById('btn-add-divisi-budget').onclick = () => {
+    document.getElementById('budget-divisi-inputs').insertAdjacentHTML('beforeend', budgetInputRow('', '', 'divisi'));
+  };
+  document.getElementById('modal-budget').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-budget') closeBudgetModal();
   });
 
   renderAll();

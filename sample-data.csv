@@ -1,16 +1,17 @@
-tanggal,badanUsaha,outlet,vendor,divisi,deskripsi,qty,satuan,hargaSatuan,total
-2026-05-02,PT Sumber Karya Jaya,Outlet Jakarta Pusat,CV Sentosa,Food,Beras Premium 25kg,40,kg,15000,600000
-2026-05-03,PT Bintang Niaga,Outlet Bandung,PT Aneka Pangan,Beverage,Air Mineral Galon,50,galon,20000,1000000
-2026-05-05,PT Sumber Karya Jaya,Outlet Surabaya,UD Berkah Jaya,Non-Food,Tisu Roll,100,pack,12000,1200000
-2026-05-08,PT Mitra Sejati,Outlet Medan,PT Distribusi Nasional,Packaging,Plastik Kemasan,200,pack,8000,1600000
-2026-05-10,PT Andalan Prima,Outlet Jakarta Pusat,CV Maju Mundur,Office Supplies,ATK Set,15,box,150000,2250000
-2026-05-12,PT Sumber Karya Jaya,Outlet Bali,PT Logistik Cepat,Food,Minyak Goreng,80,liter,18000,1440000
-2026-05-15,PT Bintang Niaga,Outlet Bandung,UD Sumber Rejeki,Maintenance,Spare Part Mesin,5,pcs,500000,2500000
-2026-05-18,PT Mitra Sejati,Outlet Makassar,CV Sentosa,Food,Gula Pasir,60,kg,16000,960000
-2026-04-05,PT Sumber Karya Jaya,Outlet Jakarta Pusat,CV Sentosa,Food,Beras Premium,30,kg,15000,450000
-2026-04-12,PT Bintang Niaga,Outlet Bandung,PT Aneka Pangan,Beverage,Soft Drink,80,dus,45000,3600000
-2026-04-20,PT Andalan Prima,Outlet Surabaya,PT Logistik Cepat,Non-Food,Cleaning Supplies,25,box,80000,2000000
-2026-03-08,PT Mitra Sejati,Outlet Medan,UD Berkah Jaya,Food,Daging Sapi,20,kg,120000,2400000
-2026-03-15,PT Sumber Karya Jaya,Outlet Bali,CV Maju Mundur,Packaging,Box Karton,150,pcs,5000,750000
-2025-12-10,PT Bintang Niaga,Outlet Jakarta Pusat,PT Aneka Pangan,Food,Beras Premium,50,kg,15000,750000
-2025-11-05,PT Andalan Prima,Outlet Bandung,CV Sentosa,Beverage,Kopi Bubuk,30,kg,80000,2400000
+tanggal,badanUsaha,outlet,vendor,divisi,prNumber,poNumber,deskripsi,qty,satuan,hargaSatuan,total,approvalStatus,paymentStatus
+2026-05-02,PT,Outlet Jakarta Pusat,CV Sentosa,Food,PR-2026-0001,PO-2026-0001,Beras Premium 25kg,40,kg,15000,600000,Approved,Paid
+2026-05-03,CV,Outlet Bandung,PT Aneka Pangan,Beverage,PR-2026-0002,PO-2026-0002,Air Mineral Galon,50,galon,20000,1000000,Approved,Paid
+2026-05-05,PT,Outlet Surabaya,UD Berkah Jaya,Non-Food,PR-2026-0003,PO-2026-0003,Tisu Roll,100,pack,12000,1200000,Approved,Partial
+2026-05-08,PW,Outlet Medan,PT Distribusi Nasional,Packaging,PR-2026-0004,PO-2026-0004,Plastik Kemasan,200,pack,8000,1600000,Approved,Unpaid
+2026-05-10,SW,Outlet Jakarta Pusat,CV Maju Mundur,Office Supplies,PR-2026-0005,PO-2026-0005,ATK Set,15,box,150000,2250000,Approved,Paid
+2026-05-12,PT,Outlet Bali,PT Logistik Cepat,Food,PR-2026-0006,PO-2026-0006,Minyak Goreng,80,liter,18000,1440000,Pending,Unpaid
+2026-05-15,CV,Outlet Bandung,UD Sumber Rejeki,Maintenance,PR-2026-0007,PO-2026-0007,Spare Part Mesin,5,pcs,500000,2500000,Approved,Paid
+2026-05-18,PW,Outlet Makassar,CV Sentosa,Food,PR-2026-0008,,Gula Pasir,60,kg,16000,960000,Pending,Unpaid
+2026-05-20,SW,Outlet Surabaya,PT Aneka Pangan,Beverage,PR-2026-0009,PO-2026-0009,Soft Drink,30,dus,45000,1350000,Approved,Partial
+2026-04-05,PT,Outlet Jakarta Pusat,CV Sentosa,Food,PR-2026-0010,PO-2026-0010,Beras Premium,30,kg,15000,450000,Approved,Paid
+2026-04-12,CV,Outlet Bandung,PT Aneka Pangan,Beverage,PR-2026-0011,PO-2026-0011,Soft Drink,80,dus,45000,3600000,Approved,Paid
+2026-04-20,SW,Outlet Surabaya,PT Logistik Cepat,Non-Food,PR-2026-0012,PO-2026-0012,Cleaning Supplies,25,box,80000,2000000,Approved,Paid
+2026-03-08,PW,Outlet Medan,UD Berkah Jaya,Food,PR-2026-0013,PO-2026-0013,Daging Sapi,20,kg,120000,2400000,Approved,Paid
+2026-03-15,PT,Outlet Bali,CV Maju Mundur,Packaging,PR-2026-0014,PO-2026-0014,Box Karton,150,pcs,5000,750000,Approved,Paid
+2025-12-10,CV,Outlet Jakarta Pusat,PT Aneka Pangan,Food,PR-2025-0145,PO-2025-0145,Beras Premium,50,kg,15000,750000,Approved,Paid
+2025-11-05,SW,Outlet Bandung,CV Sentosa,Beverage,PR-2025-0132,PO-2025-0132,Kopi Bubuk,30,kg,80000,2400000,Approved,Paid

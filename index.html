@@ -8,26 +8,35 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar no-print">
     <div class="brand">
       <div class="logo">SKJ</div>
       <div>
         <h1>Dashboard Pembelian</h1>
-        <p class="subtitle">Purchasing Analytics &middot; Multi Badan Usaha</p>
+        <p class="subtitle">Purchasing Analytics &middot; PT &middot; CV &middot; PW &middot; SW</p>
       </div>
     </div>
     <div class="topbar-actions">
       <button id="btn-add" class="btn btn-primary">+ Input Pembelian</button>
+      <button id="btn-budget" class="btn btn-secondary">Set Budget</button>
       <button id="btn-import" class="btn btn-secondary">Import CSV</button>
       <button id="btn-export" class="btn btn-secondary">Export CSV</button>
+      <button id="btn-print" class="btn btn-secondary">Print Report</button>
       <button id="btn-sample" class="btn btn-ghost" title="Load contoh data">Load Sample</button>
       <button id="btn-clear" class="btn btn-danger" title="Hapus semua data">Reset</button>
       <input type="file" id="file-input" accept=".csv" hidden />
     </div>
   </header>
 
+  <!-- PRINT HEADER (only visible on print) -->
+  <div class="print-header print-only">
+    <h1 id="print-title">Laporan Pembelian SKJ</h1>
+    <p id="print-period">Periode: -</p>
+    <p id="print-date">Dicetak: -</p>
+  </div>
+
   <!-- FILTER BAR -->
-  <section class="filterbar">
+  <section class="filterbar no-print">
     <div class="filter-group">
       <label>Tahun</label>
       <select id="f-year"></select>
@@ -67,7 +76,25 @@
       <select id="f-divisi"><option value="all">Semua Divisi</option></select>
     </div>
     <div class="filter-group">
-      <label>Mode Compare</label>
+      <label>Approval</label>
+      <select id="f-approval">
+        <option value="all">Semua</option>
+        <option value="Pending">Pending</option>
+        <option value="Approved">Approved</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Payment</label>
+      <select id="f-payment">
+        <option value="all">Semua</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Partial">Partial</option>
+        <option value="Paid">Paid</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Compare Mode</label>
       <select id="f-compare">
         <option value="mom">Month-to-Month (MoM)</option>
         <option value="yoy">Year-on-Year (YoY)</option>
@@ -93,6 +120,16 @@
       <div class="kpi-label" id="kpi-compare-label">vs Periode Lalu</div>
       <div class="kpi-value" id="kpi-compare">Rp 0</div>
       <div class="kpi-sub"><span id="kpi-delta" class="delta">-</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">⏳ Pending Approval</div>
+      <div class="kpi-value" id="kpi-pending">Rp 0</div>
+      <div class="kpi-sub" id="kpi-pending-sub">0 transaksi</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">💸 Outstanding Payment</div>
+      <div class="kpi-value" id="kpi-outstanding">Rp 0</div>
+      <div class="kpi-sub" id="kpi-outstanding-sub">0 transaksi</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Avg per Transaksi</div>
@@ -128,6 +165,24 @@
     </div>
   </section>
 
+  <!-- BUDGET SECTION -->
+  <section class="budget-section">
+    <div class="budget-header">
+      <h3>📊 Budget vs Actual <span class="muted" id="budget-period">-</span></h3>
+      <button id="btn-budget-2" class="btn-link no-print">Atur Budget →</button>
+    </div>
+    <div class="budget-grid">
+      <div class="budget-card">
+        <h4>Per Badan Usaha</h4>
+        <div id="budget-bu-list" class="budget-list"></div>
+      </div>
+      <div class="budget-card">
+        <h4>Per Divisi</h4>
+        <div id="budget-divisi-list" class="budget-list"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- RANKINGS -->
   <section class="rank-grid">
     <div class="rank-card">
@@ -152,22 +207,25 @@
   <section class="trx-section">
     <div class="trx-header">
       <h3>Daftar Transaksi <span class="muted" id="trx-count">(0)</span></h3>
-      <input type="text" id="trx-search" placeholder="Cari deskripsi / vendor / outlet..." />
+      <input type="text" id="trx-search" placeholder="Cari deskripsi / vendor / outlet / PR / PO..." class="no-print" />
     </div>
     <div class="table-wrap">
       <table class="trx-table">
         <thead>
           <tr>
             <th>Tanggal</th>
-            <th>Badan Usaha</th>
+            <th>BU</th>
             <th>Outlet</th>
             <th>Vendor</th>
             <th>Divisi</th>
+            <th>PR No</th>
+            <th>PO No</th>
             <th>Deskripsi</th>
             <th class="num">Qty</th>
-            <th class="num">Harga Satuan</th>
             <th class="num">Total</th>
-            <th></th>
+            <th>Approval</th>
+            <th>Payment</th>
+            <th class="no-print"></th>
           </tr>
         </thead>
         <tbody id="trx-body"></tbody>
@@ -184,29 +242,48 @@
       </div>
       <form id="form-trx" class="modal-body">
         <input type="hidden" id="form-id" />
-        <div class="form-row">
-          <label>Tanggal *</label>
-          <input type="date" id="form-tanggal" required />
+        <div class="form-row form-row-2">
+          <div>
+            <label>Tanggal *</label>
+            <input type="date" id="form-tanggal" required />
+          </div>
+          <div>
+            <label>Badan Usaha *</label>
+            <input list="dl-bu" id="form-bu" required placeholder="PT / CV / PW / SW" />
+            <datalist id="dl-bu">
+              <option value="PT">
+              <option value="CV">
+              <option value="PW">
+              <option value="SW">
+            </datalist>
+          </div>
         </div>
-        <div class="form-row">
-          <label>Badan Usaha *</label>
-          <input list="dl-bu" id="form-bu" required placeholder="Pilih / ketik nama BU" />
-          <datalist id="dl-bu"></datalist>
-        </div>
-        <div class="form-row">
-          <label>Outlet *</label>
-          <input list="dl-outlet" id="form-outlet" required placeholder="Pilih / ketik outlet" />
-          <datalist id="dl-outlet"></datalist>
+        <div class="form-row form-row-2">
+          <div>
+            <label>Outlet *</label>
+            <input list="dl-outlet" id="form-outlet" required placeholder="Pilih / ketik outlet" />
+            <datalist id="dl-outlet"></datalist>
+          </div>
+          <div>
+            <label>Divisi *</label>
+            <input list="dl-divisi" id="form-divisi" required placeholder="Pilih / ketik divisi" />
+            <datalist id="dl-divisi"></datalist>
+          </div>
         </div>
         <div class="form-row">
           <label>Vendor *</label>
           <input list="dl-vendor" id="form-vendor" required placeholder="Pilih / ketik vendor" />
           <datalist id="dl-vendor"></datalist>
         </div>
-        <div class="form-row">
-          <label>Divisi *</label>
-          <input list="dl-divisi" id="form-divisi" required placeholder="Pilih / ketik divisi" />
-          <datalist id="dl-divisi"></datalist>
+        <div class="form-row form-row-2">
+          <div>
+            <label>PR Number</label>
+            <input type="text" id="form-pr" placeholder="PR-2026-001" />
+          </div>
+          <div>
+            <label>PO Number</label>
+            <input type="text" id="form-po" placeholder="PO-2026-001" />
+          </div>
         </div>
         <div class="form-row">
           <label>Deskripsi Barang/Jasa</label>
@@ -230,11 +307,61 @@
           <label>Total Harga</label>
           <input type="text" id="form-total" readonly class="readonly" />
         </div>
+        <div class="form-row form-row-2">
+          <div>
+            <label>Status Approval *</label>
+            <select id="form-approval" required>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <div>
+            <label>Status Payment *</label>
+            <select id="form-payment" required>
+              <option value="Unpaid">Unpaid</option>
+              <option value="Partial">Partial</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+        </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-ghost" id="form-cancel">Batal</button>
           <button type="submit" class="btn btn-primary" id="form-submit">Simpan</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BUDGET -->
+  <div id="modal-budget" class="modal-bg hidden">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Atur Budget Tahunan</h3>
+        <button class="modal-close" id="modal-budget-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Tahun</label>
+          <select id="budget-year"></select>
+        </div>
+        <div class="budget-form-grid">
+          <div>
+            <h4>Budget per Badan Usaha</h4>
+            <div id="budget-bu-inputs"></div>
+            <button type="button" class="btn-link" id="btn-add-bu-budget">+ Tambah BU</button>
+          </div>
+          <div>
+            <h4>Budget per Divisi</h4>
+            <div id="budget-divisi-inputs"></div>
+            <button type="button" class="btn-link" id="btn-add-divisi-budget">+ Tambah Divisi</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="btn-budget-cancel">Batal</button>
+          <button type="button" class="btn btn-primary" id="btn-budget-save">Simpan Budget</button>
+        </div>
+      </div>
     </div>
   </div>
 
